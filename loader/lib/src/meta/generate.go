@@ -228,6 +228,7 @@ func needsLink(progType ebpf.ProgramType) bool {
 		ebpf.CGroupSKB,
 		ebpf.CGroupDevice,
 		ebpf.CGroupSysctl,
+		ebpf.SockOps,
 		ebpf.CGroupSock,
 		ebpf.CGroupSockAddr,
 		ebpf.CGroupSockopt:

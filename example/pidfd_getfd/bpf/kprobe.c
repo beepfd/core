@@ -37,6 +37,13 @@ struct
 
 struct event *unused_event_t __attribute__((unused));
 
+SEC("tracepoint/skb/kfree_skb")
+int TP_PROBE(struct trace_event_raw_kfree_skb *args)
+{
+    bpf_printk("addr=0x%llx reason=%d", (long long)args->skbaddr, args->reason);
+    return 0;
+}
+
 // 使用 bpfsnoop -k __x64_sys_pidfd_* --output-stack --output-arg="regs->di" --output-arg="regs->si" 命令进行验证
 SEC("tracepoint/syscalls/sys_enter_pidfd_getfd")
 int trace_pidfd_getfd(struct trace_event_raw_sys_enter *ctx)
