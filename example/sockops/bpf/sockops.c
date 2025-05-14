@@ -8,6 +8,11 @@
 
 #define CUSTOM_TCP_OPT_KIND 0xDA
 #define CUSTOM_TCP_OPT_LEN 2
+
+#define CG_OK 1
+#define CG_ERR 0
+#define ERR2CG(err) (err) ? CG_ERR : CG_OK
+
 struct tcp_opt_source_info
 {
     __u8 kind;
@@ -19,6 +24,15 @@ struct tcp_opt_source_info
     } __attribute__((packed)) address;
 } __attribute__((packed));
 #define TCP_OPT_SOURCE_INFO_KIND 0x55
+
+static __always_inline int handle_hdr_opt_len(struct bpf_sock_ops *skops)
+{
+    const int bytes_to_reserve = sizeof(struct tcp_opt_source_info);
+    int err = bpf_reserve_hdr_opt(skops, bytes_to_reserve, 0);
+    int cg = ERR2CG(err);
+    bpf_printk("handle_hdr_opt_len: %d", cg);
+    return cg;
+}
 
 SEC("sockops")
 int handle_tcp_options(struct bpf_sock_ops *skops)
@@ -55,13 +69,14 @@ int handle_tcp_options(struct bpf_sock_ops *skops)
     }
     case BPF_SOCK_OPS_HDR_OPT_LEN_CB: // 处理选项长度预留
         bpf_printk("HDR_OPT_LEN_CB triggered");
-        const int bytes_to_reserve = sizeof(struct tcp_opt_source_info);
-        int err = bpf_reserve_hdr_opt(skops, bytes_to_reserve, 0);
-        if (err != 0)
-        {
-            bpf_printk("Reserve failed: %d", err);
-        }
-        return 0;
+        // bpf_printk("HDR_OPT_LEN_CB triggered");
+        // const int bytes_to_reserve = sizeof(struct tcp_opt_source_info);
+        // int err = bpf_reserve_hdr_opt(skops, bytes_to_reserve, 0);
+        // if (err != 0) {
+        //     bpf_printk("Reserve failed: %d", err);
+        // }
+        // return 0;
+        return handle_hdr_opt_len(skops);
     case BPF_SOCK_OPS_WRITE_HDR_OPT_CB: // 处理选项写入
         bpf_printk("WRITE_HDR_OPT_CB triggered");
         struct tcp_opt_source_info opt = {0};

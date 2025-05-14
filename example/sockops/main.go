@@ -31,7 +31,7 @@ func main() {
 		Properties: meta.Properties{
 			Programs: map[string]*meta.Program{
 				"handle_tcp_options": {
-					Properties: &meta.ProgramProperties{CGroupPath: "/sys/fs/cgroup"},
+					Properties: &meta.ProgramProperties{CGroupPath: "/sys/fs/cgroup/unified/bpf_test"},
 				},
 			},
 		},
