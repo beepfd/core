@@ -47,7 +47,7 @@ func TestRingBufferPoller_Poll(t *testing.T) {
 				return
 			}
 
-			preLoadBpfSkeleton, err := FromJsonPackage(pkg, tt.fields.BtfArchivePath).Build()
+			preLoadBpfSkeleton, err := FromJsonPackage(pkg, tt.fields.BtfArchivePath, zaptest.NewLogger(t)).Build()
 			if err != nil {
 				t.Errorf("Build() error = %v", err)
 				return

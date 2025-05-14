@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -119,7 +118,7 @@ func (l *BPFLoader) Init() (err error) {
 	}
 
 	// 构建预加载骨架
-	preLoadSkeleton, err := skeleton.FromJsonPackage(pkg, filepath.Dir(l.Config.ObjectPath)).Build()
+	preLoadSkeleton, err := skeleton.FromJsonPackage(pkg, l.Config.BTFPath, l.Logger).Build()
 	if err != nil {
 		return fmt.Errorf("build preload skeleton failed: %w", err)
 	}

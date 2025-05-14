@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/meta"
+	"go.uber.org/zap"
 )
 
 func TestBpfSkeletonBuilder_Build(t *testing.T) {
@@ -72,6 +73,7 @@ func TestFromJsonPackage(t *testing.T) {
 	type args struct {
 		pkg            *meta.ComposedObject
 		btfArchivePath string
+		logger         *zap.Logger
 	}
 	tests := []struct {
 		name string
@@ -83,12 +85,13 @@ func TestFromJsonPackage(t *testing.T) {
 			args: args{
 				pkg:            pkg,
 				btfArchivePath: "../../../testdata/",
+				logger:         zap.NewExample(),
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FromJsonPackage(tt.args.pkg, tt.args.btfArchivePath)
+			got := FromJsonPackage(tt.args.pkg, tt.args.btfArchivePath, tt.args.logger)
 
 			preLoadBpfSkeleton, err := got.Build()
 			if err != nil {

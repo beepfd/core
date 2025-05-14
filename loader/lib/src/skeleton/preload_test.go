@@ -6,6 +6,7 @@ import (
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/container"
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/meta"
 	"github.com/cilium/ebpf"
+	"go.uber.org/zap/zaptest"
 )
 
 func TestPreLoadBpfSkeleton_LoadAndAttach(t *testing.T) {
@@ -44,7 +45,7 @@ func TestPreLoadBpfSkeleton_LoadAndAttach(t *testing.T) {
 				return
 			}
 
-			preLoadBpfSkeleton, err := FromJsonPackage(pkg, tt.fields.BtfArchivePath).Build()
+			preLoadBpfSkeleton, err := FromJsonPackage(pkg, tt.fields.BtfArchivePath, zaptest.NewLogger(t)).Build()
 			if err != nil {
 				t.Errorf("Build() error = %v", err)
 				return

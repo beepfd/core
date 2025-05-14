@@ -9,6 +9,7 @@ import (
 	btfutils "github.com/cen-ngc5139/BeePF/loader/lib/src/btf"
 	"github.com/cilium/ebpf/btf"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/container"
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/meta"
@@ -28,21 +29,25 @@ type BpfSkeletonBuilder struct {
 
 	// runnerConfig 运行时配置
 	runnerConfig *meta.RunnerConfig
+
+	// logger 日志记录器
+	logger *zap.Logger
 }
 
 // NewBpfSkeletonBuilder 从对象元数据和对象缓冲区创建构建器
 // btfArchivePath - 内核 BTF 文件存档的根路径，如果不提供，将尝试使用环境变量 BTF_FILE_PATH 和 /sys/kernel/btf/vmlinux
-func NewBpfSkeletonBuilder(meta *meta.EunomiaObjectMeta, bpfObject []byte, btfArchivePath string) *BpfSkeletonBuilder {
+func NewBpfSkeletonBuilder(meta *meta.EunomiaObjectMeta, bpfObject []byte, btfArchivePath string, logger *zap.Logger) *BpfSkeletonBuilder {
 	return &BpfSkeletonBuilder{
 		btfArchivePath: btfArchivePath,
 		objectMeta:     meta,
 		bpfObject:      bpfObject,
+		logger:         logger,
 	}
 }
 
 // FromJsonPackage 从 JSON 包创建构建器
-func FromJsonPackage(pkg *meta.ComposedObject, btfArchivePath string) *BpfSkeletonBuilder {
-	return NewBpfSkeletonBuilder(&pkg.Meta, pkg.BpfObject, btfArchivePath)
+func FromJsonPackage(pkg *meta.ComposedObject, btfArchivePath string, logger *zap.Logger) *BpfSkeletonBuilder {
+	return NewBpfSkeletonBuilder(&pkg.Meta, pkg.BpfObject, btfArchivePath, logger)
 }
 
 // SetRunnerConfig 设置运行时配置
@@ -126,6 +131,7 @@ func (b *BpfSkeletonBuilder) findBTFFile() (string, error) {
 	if b.btfArchivePath != "" {
 		path := filepath.Join(b.btfArchivePath, "vmlinux")
 		if fileExists(path) {
+			b.logger.Info("found BTF file in custom path", zap.String("path", path))
 			return path, nil
 		}
 	}
@@ -133,12 +139,14 @@ func (b *BpfSkeletonBuilder) findBTFFile() (string, error) {
 	// 2. 检查环境变量
 	if envPath := os.Getenv(BTF_PATH_ENV_NAME); envPath != "" {
 		if fileExists(envPath) {
+			b.logger.Info("found BTF file in environment variable", zap.String("path", envPath))
 			return envPath, nil
 		}
 	}
 
 	// 3. 检查默认系统路径
 	if fileExists(VMLINUX_BTF_PATH) {
+		b.logger.Info("found BTF file in default system path", zap.String("path", VMLINUX_BTF_PATH))
 		return VMLINUX_BTF_PATH, nil
 	}
 
