@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+
+script_name=${0##*/}
+BTFHUB_CACHE_DIR="${BTFHUB_CACHE:-$HOME/.cache/beef/btfhub}"
+BTFHUB_REPO_URL="${BTFHUB_REPO:-https://github.com/beepfd/btfhub-archive}"
+usage() {
+	cat <<-EOF
+	Usage:
+	  ${script_name} [-h|--help]
+	    print this help message
+
+	  ${script_name} [btfgen] [OPTIONS] BPF.o [BPF.o...]
+      Create reduced version of BTF files to be embedded within the tools executables
+
+	  ${script_name} [fetch]
+      fetch btfhub-archive from REPO and save to DIR
+      DIR default is "${HOME}/.cache/eunomia/btfhub" or you can set "\$BTFHUB_CACHE" to override
+      REPO default is "https://github.com/beepfd/btfhub-archive" or you can set "\$BTFHUB_REPO"
+      to override; multiple repositories are separated by commas (,)
+
+	Options:
+	  btfgen options:
+      -j, --json JSON_FILE  compress tar.gz with package.json
+      -o, --output OUTPUT_PATH output tar file path
+	EOF
+}
+
+fetch() {
+  if [ -d "$BTFHUB_CACHE_DIR" ]; then
+    echo "BTFHUB_CACHE_DIR does exist, skip fetch"
+    return
+  fi
+
+  if ! command -v git &> /dev/null; then echo "Error: git is not installed."; exit 1; fi
+  if ! command -v rsync &> /dev/null; then echo "Error: rsync is not installed."; exit 1; fi
+  
+  local repos repo repo_dir
+  IFS=',' read -r -a repos <<< "$BTFHUB_REPO_URL"
+  for repo in "${repos[@]}"; do
+    repo_dir="$BTFHUB_CACHE_DIR/btfhub-archive-repos/${repo//[^A-Za-z0-9._-]/_}/"
+    mkdir -p "$repo_dir"
+    git clone --depth 1 "$repo" "$repo_dir"
+    rsync -av --quiet --ignore-existing \
+      --exclude 'LICENSE' \
+      --exclude 'README.md' \
+      --exclude '.gitignore' \
+      --exclude '.git' \
+      "$repo_dir" "$BTFHUB_CACHE_DIR/btfhub-archive/"
+  done
+}
+
+btfgen() {
+  fetch
+  if ! command -v bpftool &> /dev/null; then echo "Error: bpftool is not installed."; exit 1; fi
+  short_args="j:f:o:"
+	long_args="json:,file:,output:"
+	TEMP=$(getopt -o "$short_args" --long "$long_args" -n "$script_name" -- "$@") \
+		|| return 1
+	eval set -- "$TEMP";
+
+	local json files output
+	while [[ ${1:0:1} == - ]]; do
+		[[ $1 =~ ^-f|--file$ ]] && {
+			shift 1;
+			if [ -n "$1" ]; then files+=("$1"); shift 1; continue; fi
+		};
+		[[ $1 =~ ^-j|--json$ ]]    && { json="$2"; shift 2; continue; };
+		[[ $1 =~ ^-o|--output$ ]]    && { output="$2"; shift 2; continue; };
+		[[ $1 == -- ]]    && { shift 1; files+=("$@"); break; };
+		break;
+	done
+
+  if [ -z "$output" ]; then output="output.tar"; fi
+ 
+  dir=$(pwd)
+
+  find $BTFHUB_CACHE_DIR -name "*.tar.xz" -not -path "$BTFHUB_CACHE_DIR/btfhub-archive-repos/*" | \
+  xargs -P 8 -I fileName sh -c 'tar xfJ "fileName" -C "$(dirname "fileName")"'
+  find $BTFHUB_CACHE_DIR -name "*.btf" -not -path "$BTFHUB_CACHE_DIR/btfhub-archive-repos/*" | \
+  xargs -P 8 -I fileName sh -c 'bpftool gen min_core_btf "fileName" "fileName" "$@"' _ "${files[@]}"
+
+  if [ -n "$json" ]; then cp $json $BTFHUB_CACHE_DIR; fi
+
+  cd $BTFHUB_CACHE_DIR && tar \
+    --exclude="./btfhub-archive-repos" \
+    --exclude="*.xz" \
+    -czf $dir/$output .
+}
+
+main() {
+	action="$1"
+	shift
+	case "$action" in
+		(btfgen) btfgen "$@";;
+		(fetch) fetch "$@";;
+		(-h|--help) usage;;
+		(*) echo "no action given. try '$script_name' -h for more information"
+	esac
+}
+
+main "$@"
