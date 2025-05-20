@@ -10,6 +10,7 @@ import (
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/meta"
 	"github.com/cilium/ebpf/rlimit"
 
+	_ "embed"
 	"flag"
 
 	loader "github.com/cen-ngc5139/BeePF/loader/lib/src/cli"
@@ -18,6 +19,9 @@ import (
 
 //go:generate sh -c "echo Generating for $TARGET_GOARCH"
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type ipv4_key_t  -target $TARGET_GOARCH -go-package main -output-dir ./ -cc clang -no-strip TcpNat ./bpf/tcpnat.c -- -I../headers -Wno-address-of-packed-member
+
+//go:embed min_core_btfs.tar.gz
+var minCoreBtfs []byte
 
 var SkipNet = flag.String("skip", "", "跳过指定网络，格式为逗号分隔的CIDR列表，如 10.0.0.0/24,192.168.100.0/24")
 
@@ -49,6 +53,7 @@ func main() {
 
 	config := &loader.Config{
 		ObjectBytes: _TcpNatBytes,
+		BTFBytes:    minCoreBtfs,
 		Logger:      logger,
 		PollTimeout: 100 * time.Millisecond,
 		Properties: meta.Properties{

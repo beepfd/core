@@ -97,7 +97,9 @@ func (p *PreLoadBpfSkeleton) LoadPinProgram(progMeta *meta.ProgMeta) (*ebpf.Prog
 func (p *PreLoadBpfSkeleton) LoadAndAttach() (*BpfSkeleton, map[string]meta.ProgAttachStatus, error) {
 	progAttachStatus := make(map[string]meta.ProgAttachStatus)
 
-	collectionOptions := ebpf.CollectionOptions{}
+	collectionOptions := ebpf.CollectionOptions{
+		Programs: ebpf.ProgramOptions{KernelTypes: p.BTFSpec},
+	}
 	mergedMaps, err := p.MergeMapProperties()
 	if err != nil {
 		return nil, progAttachStatus, fmt.Errorf("merge map properties error: %w", err)

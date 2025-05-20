@@ -49,6 +49,7 @@ type Config struct {
 	ObjectPath  string
 	ObjectBytes []byte
 	BTFPath     string
+	BTFBytes    []byte
 	Logger      *zap.Logger
 	PollTimeout time.Duration
 	Properties  meta.Properties
@@ -118,7 +119,7 @@ func (l *BPFLoader) Init() (err error) {
 	}
 
 	// 构建预加载骨架
-	preLoadSkeleton, err := skeleton.FromJsonPackage(pkg, l.Config.BTFPath, l.Logger).Build()
+	preLoadSkeleton, err := skeleton.FromJsonPackage(pkg, l.Config.BTFPath, l.Config.BTFBytes, l.Logger).Build()
 	if err != nil {
 		return fmt.Errorf("build preload skeleton failed: %w", err)
 	}

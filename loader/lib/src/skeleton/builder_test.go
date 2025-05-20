@@ -91,7 +91,7 @@ func TestFromJsonPackage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FromJsonPackage(tt.args.pkg, tt.args.btfArchivePath, tt.args.logger)
+			got := FromJsonPackage(tt.args.pkg, tt.args.btfArchivePath, nil, tt.args.logger)
 
 			preLoadBpfSkeleton, err := got.Build()
 			if err != nil {

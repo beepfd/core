@@ -21,6 +21,9 @@ type BpfSkeletonBuilder struct {
 	// btfArchivePath 内核 BTF 文件存档路径
 	btfArchivePath string
 
+	// btfBytes 内核 BTF 文件的二进制数据
+	btfBytes []byte
+
 	// objectMeta 对象元数据
 	objectMeta *meta.EunomiaObjectMeta
 
@@ -36,9 +39,10 @@ type BpfSkeletonBuilder struct {
 
 // NewBpfSkeletonBuilder 从对象元数据和对象缓冲区创建构建器
 // btfArchivePath - 内核 BTF 文件存档的根路径，如果不提供，将尝试使用环境变量 BTF_FILE_PATH 和 /sys/kernel/btf/vmlinux
-func NewBpfSkeletonBuilder(meta *meta.EunomiaObjectMeta, bpfObject []byte, btfArchivePath string, logger *zap.Logger) *BpfSkeletonBuilder {
+func NewBpfSkeletonBuilder(meta *meta.EunomiaObjectMeta, bpfObject []byte, btfArchivePath string, btfBytes []byte, logger *zap.Logger) *BpfSkeletonBuilder {
 	return &BpfSkeletonBuilder{
 		btfArchivePath: btfArchivePath,
+		btfBytes:       btfBytes,
 		objectMeta:     meta,
 		bpfObject:      bpfObject,
 		logger:         logger,
@@ -46,8 +50,8 @@ func NewBpfSkeletonBuilder(meta *meta.EunomiaObjectMeta, bpfObject []byte, btfAr
 }
 
 // FromJsonPackage 从 JSON 包创建构建器
-func FromJsonPackage(pkg *meta.ComposedObject, btfArchivePath string, logger *zap.Logger) *BpfSkeletonBuilder {
-	return NewBpfSkeletonBuilder(&pkg.Meta, pkg.BpfObject, btfArchivePath, logger)
+func FromJsonPackage(pkg *meta.ComposedObject, btfArchivePath string, btfBytes []byte, logger *zap.Logger) *BpfSkeletonBuilder {
+	return NewBpfSkeletonBuilder(&pkg.Meta, pkg.BpfObject, btfArchivePath, btfBytes, logger)
 }
 
 // SetRunnerConfig 设置运行时配置
@@ -95,6 +99,7 @@ func (b *BpfSkeletonBuilder) Build() (*PreLoadBpfSkeleton, error) {
 	return &PreLoadBpfSkeleton{
 		Meta:          b.objectMeta,
 		ConfigData:    b.runnerConfig,
+		BTFSpec:       vmlinux,
 		Btf:           btf,
 		Spec:          spec,
 		MapValueSizes: mapValueSizes,
@@ -148,6 +153,15 @@ func (b *BpfSkeletonBuilder) findBTFFile() (string, error) {
 	if fileExists(VMLINUX_BTF_PATH) {
 		b.logger.Info("found BTF file in default system path", zap.String("path", VMLINUX_BTF_PATH))
 		return VMLINUX_BTF_PATH, nil
+	}
+
+	if b.btfBytes != nil {
+		btfFile, err := b.FindBTFFromTar(b.btfBytes)
+		if err != nil {
+			return "", fmt.Errorf("failed to load btf: %w", err)
+		}
+		b.logger.Info("found BTF file in tar", zap.String("path", btfFile))
+		return btfFile, nil
 	}
 
 	return "", fmt.Errorf("BTF file not found. Tried: custom path, %s, and %s",

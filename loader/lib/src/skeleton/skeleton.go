@@ -6,6 +6,7 @@ import (
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/container"
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/meta"
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/btf"
 	"github.com/cilium/ebpf/link"
 )
 
@@ -20,6 +21,9 @@ type PreLoadBpfSkeleton struct {
 
 	// BTF 信息
 	Btf *container.BTFContainer
+
+	// BTFSpec 表示 BTF 的规范
+	BTFSpec *btf.Spec
 
 	// CollectionSpec 替代原来的 bpf_object
 	// 包含了未加载的程序和 maps 的规格说明
