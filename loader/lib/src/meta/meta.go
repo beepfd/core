@@ -363,10 +363,11 @@ const (
 
 // prog attach status
 type ProgAttachStatus struct {
-	ProgName string     `json:"prog_name"`
-	AttachID uint32     `json:"attach_id"`
-	Status   TaskStatus `json:"status"`
-	Error    string     `json:"error"`
+	ProgName      string        `json:"prog_name"`
+	AttachID      uint32        `json:"attach_id"`
+	Status        TaskStatus    `json:"status"`
+	Error         string        `json:"error"`
+	VerifierStats VerifierStats `json:"verifier_stats"`
 }
 
 // FindMapByIdent 通过标识符查找 Map

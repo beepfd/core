@@ -98,7 +98,10 @@ func (p *PreLoadBpfSkeleton) LoadAndAttach() (*BpfSkeleton, map[string]meta.Prog
 	progAttachStatus := make(map[string]meta.ProgAttachStatus)
 
 	collectionOptions := ebpf.CollectionOptions{
-		Programs: ebpf.ProgramOptions{KernelTypes: p.BTFSpec},
+		Programs: ebpf.ProgramOptions{
+			KernelTypes: p.BTFSpec,
+			LogLevel:    ebpf.LogLevelBranch | ebpf.LogLevelStats,
+		},
 	}
 	mergedMaps, err := p.MergeMapProperties()
 	if err != nil {
@@ -130,6 +133,15 @@ func (p *PreLoadBpfSkeleton) LoadAndAttach() (*BpfSkeleton, map[string]meta.Prog
 			err := fmt.Errorf("program %s not found", progMeta.Name)
 			progAttachStatus[progMeta.Name] = genAttachErr(status, err)
 			return nil, progAttachStatus, err
+		}
+
+		// 如果程序有 verifier log，则进行验证
+		if len(prog.VerifierLog) > 0 {
+			verifier := NewVerifier(prog.VerifierLog)
+			if err := verifier.ParseOutput(); err != nil {
+				return nil, progAttachStatus, fmt.Errorf("verify program %s error: %w", progMeta.Name, err)
+			}
+			status.VerifierStats = verifier.VerifierStats
 		}
 
 		progSpec := p.Spec.Programs[progMeta.Name]
