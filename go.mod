@@ -2,7 +2,7 @@ module github.com/cen-ngc5139/BeePF
 
 go 1.23.0
 
-toolchain go1.23.8
+toolchain go1.23.4
 
 require (
 	github.com/cilium/ebpf v0.17.2

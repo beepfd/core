@@ -26,6 +26,8 @@ func (p *ProgMeta) AttachProgram(spec *ebpf.ProgramSpec, program *ebpf.Program) 
 		link, err = p.attachCGroup(program, spec.AttachType, p.Properties.CGroupPath)
 	case ebpf.SocketFilter:
 		link, err = p.attachSocket()
+	case ebpf.SkLookup:
+		link, err = p.attachSkLookup(program)
 	case ebpf.SchedCLS:
 		link, err = p.attachTCCLS(program)
 	case ebpf.XDP:
@@ -281,4 +283,19 @@ func (p *ProgMeta) PinProgram(program *ebpf.Program) error {
 	}
 
 	return nil
+}
+
+func (p *ProgMeta) attachSkLookup(program *ebpf.Program) (link.Link, error) {
+	netns, err := os.Open("/proc/self/ns/net")
+	if err != nil {
+		return nil, fmt.Errorf("error:%v , couldn't open netns", err)
+	}
+	defer netns.Close()
+
+	link, err := link.AttachNetNs(int(netns.Fd()), program)
+	if err != nil {
+		return nil, fmt.Errorf("error:%v , couldn's activate sk_lookup %s, matchFuncName:%s", err, p.Attach, p.Name)
+	}
+
+	return link, nil
 }
