@@ -1,8 +1,15 @@
 # BeePF
 
-![BeePF Logo](./doc/image/logo.png)
-
-BeePF 是一个用 Go 语言编写的 eBPF 程序加载器和运行时框架。它提供了一套完整的工具链，用于加载、管理和监控 eBPF 程序。
+<table>
+<tr>
+<td width="150">
+<img src="./doc/image/logo.png" alt="BeePF Logo" width="150" height="auto">
+</td>
+<td>
+BeePF core 是一个用 Go 语言编写的 eBPF 程序加载器和运行时框架。它提供了一套完整的工具链，用于加载、管理和监控 eBPF 程序。
+</td>
+</tr>
+</table>
 
 ## 特性
 
@@ -11,13 +18,12 @@ BeePF 是一个用 Go 语言编写的 eBPF 程序加载器和运行时框架。�
 - 灵活的事件处理机制
 - 支持 Map 数据采样和导出
 - 内置性能监控和调试功能
-- 可视化界面支持程序详情和指令查看，便于调试和分析
 
 ## 安装
 
 确保你的系统满足以下要求：
 
-- Go 1.16 或更高版本
+- Go 1.23.0 或更高版本
 - Linux 内核 5.4 或更高版本（支持 BTF）
 - `clang` 和 `llvm` 用于编译 eBPF 程序
 
@@ -29,10 +35,11 @@ go get github.com/cen-ngc5139/BeePF
 
 ## 快速开始
 
-1. 创建一个简单的 eBPF 程序：
+1. 获取 pidfd_getfd 示例项目：
 
 ```bash
-go get github.com/cen-ngc5139/BeePF/example/sched_wakeup
+git clone https://github.com/cen-ngc5139/BeePF.git
+cd BeePF/example/pidfd_getfd
 ```
 
 2. 使用 BeePF 加载和运行程序：
@@ -41,44 +48,44 @@ go get github.com/cen-ngc5139/BeePF/example/sched_wakeup
 package main
 
 import (
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
+
+	"github.com/cen-ngc5139/BeePF/example/pidfd_getfd/binary"
+	"github.com/cen-ngc5139/BeePF/example/tcpnat/src"
+	"github.com/cen-ngc5139/BeePF/loader/lib/src/meta"
 
 	loader "github.com/cen-ngc5139/BeePF/loader/lib/src/cli"
 	"go.uber.org/zap"
 )
 
 //go:generate sh -c "echo Generating for $TARGET_GOARCH"
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type sched_latency_t -target $TARGET_GOARCH -go-package binary -output-dir ./binary -cc clang -no-strip Shepherd ./bpf/trace.c -- -I../headers -Wno-address-of-packed-member
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target $TARGET_GOARCH -go-package binary -output-dir ./binary -cc clang -no-strip kprobe ./bpf/kprobe.c -- -I../headers -Wno-address-of-packed-member
 
 func main() {
 	// 初始化日志
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		logger.Fatal("初始化日志失败", zap.Error(err))
-		return
+		panic("初始化日志失败: " + err.Error())
 	}
 	defer logger.Sync()
 
 	config := &loader.Config{
-		// 设置 eBPF 程序对象文件路径
-		ObjectPath:  "./binary/shepherd_x86_bpfel.o",
+		// 使用预编译的二进制数据
+		ObjectBytes: binary.ExportRaw(),
 		// 设置日志记录器
 		Logger:      logger,
-		// 设置要处理的结构体名称
-		StructName:  "sched_latency_t",
 		// 设置轮询超时时间
 		PollTimeout: 100 * time.Millisecond,
-		// 设置是否启用 stats 收集
-		IsEnableStats: true,
-		// 设置 stats 收集间隔
-		StatsInterval: 1 * time.Second,
-			// 设置用户自定义的 map 数据导出处理器
-		UserExporterHandler: &export.MyCustomHandler{
-			Logger: logger,
-		},
-		// 设置用户自定义的 metrics 数据导出处理器
-		UserMetricsHandler: &metrics.DefaultHandler{
-			Logger: logger,
+		// 配置 Map 属性
+		Properties: meta.Properties{
+			Maps: map[string]*meta.Map{
+				"pidfd_map": {
+					ExportHandler: &src.SkipHandler{},
+				},
+			},
 		},
 	}
 
@@ -101,101 +108,98 @@ func main() {
 
 	// 启动 eBPF 程序
 	if err := bpfLoader.Start(); err != nil {
-		logger.Fatal("start failed", zap.Error(err))
+		logger.Fatal("启动失败", zap.Error(err))
 	}
 
 	// 启动 stats 收集
 	if err := bpfLoader.Stats(); err != nil {
-		logger.Fatal("start stats collector failed", zap.Error(err))
+		logger.Fatal("启动统计收集器失败", zap.Error(err))
 	}
 
 	// 启动 metrics 收集
 	if err := bpfLoader.Metrics(); err != nil {
-		logger.Fatal("start metrics failed", zap.Error(err))
+		logger.Fatal("启动指标失败", zap.Error(err))
 	}
 
 	// 等待退出信号
-	<-bpfLoader.Done()
-	logger.Info("clean shutdown")
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+
+	logger.Info("正常关闭")
 }
 ```
+
 **生成指令部分**：
 
-````go
+```go
 //go:generate sh -c "echo Generating for $TARGET_GOARCH"
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type sched_latency_t -target $TARGET_GOARCH -go-package binary -output-dir ./binary -cc clang -no-strip Shepherd ./bpf/trace.c -- -I../headers -Wno-address-of-packed-member
-````
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -target $TARGET_GOARCH -go-package binary -output-dir ./binary -cc clang -no-strip kprobe ./bpf/kprobe.c -- -I../headers -Wno-address-of-packed-member
+```
+
 需要自定义的参数：
-- `sched_latency_t`：您的 eBPF 程序中定义的结构体名称
-- `./bpf/trace.c`：您的 eBPF 程序源文件路径
+- `kprobe`：生成的 Go 代码前缀
+- `./bpf/kprobe.c`：eBPF 程序源文件路径
 - `-I../headers`：头文件包含路径
-- `Shepherd`：生成的 Go 代码前缀
 
 **配置部分**：
 
-````go
+```go
 config := &loader.Config{
-    ObjectPath:  "./binary/shepherd_x86_bpfel.o",  // eBPF 对象文件路径
-    Logger:      logger,                           // 日志实例
-    StructName:  "sched_latency_t",               // 要处理的结构体名称
-    PollTimeout: 100 * time.Millisecond,          // 轮询超时时间
+    ObjectBytes: binary.ExportRaw(),    // 使用预编译的二进制数据
+    Logger:      logger,                // 日志实例
+    PollTimeout: 100 * time.Millisecond, // 轮询超时时间
+    Properties: meta.Properties{        // Map 配置
+        Maps: map[string]*meta.Map{
+            "pidfd_map": {
+                ExportHandler: &src.SkipHandler{},
+            },
+        },
+    },
 }
-````
-需要自定义的配置：
-- `ObjectPath`：编译后的 eBPF 对象文件路径，需要与生成指令中的名称对应
-- `StructName`：与您的 eBPF 程序中定义的结构体名称对应
-- `PollTimeout`：根据您的需求调整轮询间隔
+```
 
 **目录结构**：
 
 ```
-your_project/
+pidfd_getfd/
 ├── main.go                 # 主程序
+├── Makefile               # 构建配置
 ├── bpf/
-│   └── trace.c            # eBPF 程序源码
-├── headers/               # eBPF 程序需要的头文件
+│   └── kprobe.c          # eBPF 程序源码
 └── binary/               # 生成的文件存放目录
-    ├── shepherd_x86_bpfel.o
-    └── shepherd_bpfel.go
+    ├── kprobe_bpfel.o
+    └── kprobe_bpfel.go
 ```
 
-**eBPF 程序示例** (trace.c)：
+**eBPF 程序功能** (kprobe.c)：
 
-````c
-#include <linux/bpf.h>
-#include <bpf/bpf_helpers.h>
+这个示例监控 `pidfd_getfd` 系统调用，用于检测进程间文件描述符获取行为：
 
-struct sched_latency_t {
-    u32 pid;
-    u64 timestamp;
-    // 自定义字段...
+```c
+struct event {
+    u32 hack_tgid;      // 发起调用的进程组ID
+    u32 hack_pid;       // 发起调用的进程ID
+    u32 target_tgid;    // 目标进程组ID
+    u64 timestamp;      // 时间戳
+    int hack_fd;        // 获取到的文件描述符
+    int target_pidfd;   // 目标进程的pidfd
+    int target_fd;      // 目标进程的文件描述符
+    char hack_comm[16]; // 进程名称
 };
 
-struct {
-    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-    __uint(key_size, sizeof(int));
-    __uint(value_size, sizeof(u32));
-    __uint(max_entries, 1024);
-} events SEC(".maps");
+// 监控 pidfd_getfd 系统调用入口
+SEC("tracepoint/syscalls/sys_enter_pidfd_getfd")
+int trace_pidfd_getfd(struct trace_event_raw_sys_enter *ctx)
 
-SEC("tracepoint/sched/sched_wakeup")
-int trace_wakeup(struct trace_event_raw_sched_wakeup *ctx)
-{
-    struct sched_latency_t data = {};
-    // 填充数据...
-    
-    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, &data, sizeof(data));
-    return 0;
-}
+// 监控 pidfd_getfd 系统调用出口
+SEC("tracepoint/syscalls/sys_exit_pidfd_getfd")
+int trace_pidfd_getfd_ret(struct trace_event_raw_sys_exit *ctx)
 
-char LICENSE[] SEC("license") = "GPL";
-````
-
-需要自定义的部分：
-1. 定义您自己的数据结构 (`struct sched_latency_t`)
-2. 选择合适的 eBPF 程序类型（tracepoint/kprobe/等）
-3. 实现数据收集逻辑
-4. 选择合适的 map 类型（PERF_EVENT_ARRAY/RING_BUF/等）
+// 监控相关的 mmap 调用
+SEC("tracepoint/syscalls/sys_enter_mmap")
+int trace_mmap(struct trace_event_raw_sys_enter *ctx)
+```
 
 **编译和运行**：
 
@@ -204,27 +208,31 @@ char LICENSE[] SEC("license") = "GPL";
 export TARGET_GOARCH=amd64
 
 # 生成 eBPF 对象和 Go 代码
-go generate
+make build
 
-# 编译和运行
-go build
-sudo ./your_program
+# 运行程序（需要 root 权限）
+sudo ./getfd
+```
+
+**测试程序功能**：
+
+在另一个终端中，可以使用以下命令测试 pidfd_getfd 功能：
+
+```bash
+# 创建一个测试进程
+sleep 1000 &
+TARGET_PID=$!
+
+# 使用 pidfd_getfd 获取文件描述符（需要支持该系统调用的内核）
+# 这将触发 eBPF 程序记录相关事件
 ```
 
 **注意事项**：
 
-- 确保系统内核版本支持 eBPF（5.4+推荐）
-- 安装必要的依赖（clang、llvm、libbpf-dev等）
-- 程序通常需要 root 权限运行
-- 根据实际需求调整 map 大小和轮询间隔
-- 考虑添加错误处理和数据处理逻辑
-
-这个示例提供了基本框架，您可以根据具体需求：
-1. 修改数据结构
-2. 选择不同的 eBPF 程序类型
-3. 实现自己的数据处理逻辑
-4. 调整性能参数
-5. 添加监控和报警功能
+- 确保系统内核版本支持 `pidfd_getfd` 系统调用（Linux 5.6+）
+- 程序需要 root 权限运行
+- 该示例展示了如何监控系统调用和进程间文件描述符操作
+- 可以通过 `/sys/kernel/debug/tracing/trace_pipe` 查看 BPF 程序输出
 
 ## 架构
 
