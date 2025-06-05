@@ -48,7 +48,7 @@ $(APPS): %: $(OUTPUT)/%-btf.tar.gz  | $(OUTPUT)
 
 # Build BPF code
 $(OUTPUT)/%.bpf.o: elf
-	cp binary/soft_lock_$(BPF_ARCH)_bpfel.o $(OUTPUT)/soft_lock.bpf.o
+	cp binary/softlock_$(BPF_ARCH)_bpfel.o $(OUTPUT)/soft_lock.bpf.o
 
 $(OUTPUT)/btfhub-cache:
 	BTFHUB_REPO=https://github.com/beepfd/btfhub-archive \

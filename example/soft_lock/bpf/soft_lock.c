@@ -42,6 +42,15 @@ struct
 
 struct
 {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 10240);
+    __type(key, u64);
+    // timestamp
+    __type(value, u64);
+} queued_spin_lock_slowpath_count SEC(".maps");
+
+struct
+{
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
     __uint(key_size, sizeof(int));
     __uint(value_size, sizeof(int));
@@ -91,3 +100,89 @@ int trace_watchdog_timer(struct pt_regs *regs)
 
     return 0;
 }
+
+static __always_inline int update_queued_spin_lock_slowpath_count(u64 pid)
+{
+    u64 key = pid;
+    u64 now = bpf_ktime_get_ns();
+    bpf_map_update_elem(&queued_spin_lock_slowpath_count, &key, &now, BPF_ANY);
+    return 0;
+}
+
+static __always_inline u64 get_queued_spin_lock_slowpath_count(u64 pid)
+{
+    u64 key = pid;
+    u64 *ts = bpf_map_lookup_elem(&queued_spin_lock_slowpath_count, &key);
+    return ts ? *ts : 0;
+}
+
+static __always_inline u64 get_queued_spin_lock_slowpath_interval(u64 pid)
+{
+    u64 ts = get_queued_spin_lock_slowpath_count(pid);
+    u64 now = bpf_ktime_get_ns();
+    return now - ts;
+}
+
+static __always_inline int expo_print(u64 pid, u64 interval, const char *name)
+{
+    if (!interval)
+    {
+        bpf_printk("%s count not found", name);
+        return 0;
+    }
+
+    if (interval > 1000000)
+    {
+        bpf_printk("%s interval: %llu ns, pid: %llu", name, interval, pid);
+    }
+
+    return 0;
+}
+
+SEC("kprobe/__pv_queued_spin_lock_slowpath")
+int trace_pv_queued_spin_lock_slowpath(struct pt_regs *regs)
+{
+    u64 pid = bpf_get_current_pid_tgid();
+    // bpf_printk("PV queued spin lock slowpath: PID=%llu", pid);
+    update_queued_spin_lock_slowpath_count(pid);
+    return 0;
+}
+
+SEC("kprobe/native_queued_spin_lock_slowpath")
+int trace_native_queued_spin_lock_slowpath(struct pt_regs *regs)
+{
+    u64 pid = bpf_get_current_pid_tgid();
+    // bpf_printk("Native queued spin lock slowpath: PID=%llu", pid);
+    update_queued_spin_lock_slowpath_count(pid);
+    return 0;
+}
+
+SEC("kretprobe/__pv_queued_spin_lock_slowpath")
+int trace_pv_queued_spin_lock_slowpath_ret(struct pt_regs *regs)
+{
+    u64 pid = bpf_get_current_pid_tgid();
+    // bpf_printk("PV queued spin lock slowpath return: PID=%llu", pid);
+    u64 now = bpf_ktime_get_ns();
+    u64 interval = get_queued_spin_lock_slowpath_interval(pid);
+    expo_print(pid, interval, "PV");
+    return 0;
+}
+
+SEC("kretprobe/native_queued_spin_lock_slowpath")
+int trace_native_queued_spin_lock_slowpath_ret(struct pt_regs *regs)
+{
+    u64 pid = bpf_get_current_pid_tgid();
+    // bpf_printk("Native queued spin lock slowpath return: PID=%llu", pid);
+    u64 interval = get_queued_spin_lock_slowpath_interval(pid);
+    expo_print(pid, interval, "Native");
+    return 0;
+}
+
+// SEC("kprobe/task_dump_owner")
+// int trace_task_dump_owner(struct pt_regs *regs)
+// {
+//     u64 pid = bpf_get_current_pid_tgid();
+//     bpf_printk("Task dump owner: PID=%llu", pid);
+
+//     return 0;
+// }
