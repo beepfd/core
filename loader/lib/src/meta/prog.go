@@ -11,6 +11,14 @@ import (
 	"github.com/cilium/ebpf/link"
 )
 
+var bannedKretprobes = []string{
+	"_raw_spin_lock",
+	"_raw_spin_lock_irqsave",
+	"_raw_spin_unlock_irqrestore",
+	"queued_spin_lock_slowpath",
+	"queued_spin_unlock_slowpath",
+}
+
 // AttachProgram 根据程序类型选择合适的 attach 方式
 func (p *ProgMeta) AttachProgram(spec *ebpf.ProgramSpec, program *ebpf.Program) (link link.Link, err error) {
 
@@ -84,6 +92,10 @@ func (p *ProgMeta) attachKprobe(program *ebpf.Program) (link.Link, error) {
 		return p.attachUprobe(program)
 	}
 
+	if isRet && isBannedKretprobe(funcName) {
+		return nil, fmt.Errorf("banned kretprobe: %s", funcName)
+	}
+
 	var kp link.Link
 	if isRet {
 		kp, err = link.Kretprobe(funcName, program, nil)
@@ -96,6 +108,15 @@ func (p *ProgMeta) attachKprobe(program *ebpf.Program) (link.Link, error) {
 	}
 
 	return kp, nil
+}
+
+func isBannedKretprobe(funcName string) bool {
+	for _, banned := range bannedKretprobes {
+		if banned == funcName {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *ProgMeta) attachUprobe(program *ebpf.Program) (link.Link, error) {
