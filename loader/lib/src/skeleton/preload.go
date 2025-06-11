@@ -4,10 +4,19 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strconv"
+	"strings"
 
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/meta"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/pkg/errors"
+)
+
+var (
+	PerfEventMaxStackPath = "/proc/sys/kernel/perf_event_max_stack"
+
+	InvalidPerfEventMaxStack = errors.Errorf("invalid PERF_MAX_STACK_DEPTH, kernel config path: %s", PerfEventMaxStackPath)
 )
 
 // MergeMapProperties 合并 map 的配置
@@ -114,6 +123,11 @@ func (p *PreLoadBpfSkeleton) LoadAndAttach() (*BpfSkeleton, map[string]meta.Prog
 
 	collectionOptions.MapReplacements = mergedMaps
 
+	// 检查 map 是否符合要求
+	if err := PreCheckMap(p.Spec.Maps); err != nil {
+		return nil, progAttachStatus, fmt.Errorf("pre check map error: %w", err)
+	}
+
 	// 直接加载 BPF 对象集合，cilium/ebpf 会自动处理 .rodata 和 .bss
 	coll, err := ebpf.NewCollectionWithOptions(p.Spec, collectionOptions)
 	if err != nil {
@@ -207,4 +221,36 @@ func genAttachErr(status meta.ProgAttachStatus, err error) meta.ProgAttachStatus
 	status.Status = meta.TaskStatusFailed
 	status.Error = err.Error()
 	return status
+}
+
+func PreCheckMap(mapsSpec map[string]*ebpf.MapSpec) error {
+	for _, mapSpec := range mapsSpec {
+		if mapSpec.Type != ebpf.StackTrace {
+			continue
+		}
+
+		stack, err := getPerfEventMaxStack()
+		if err != nil {
+			return fmt.Errorf("get perf event max stack error: %w", err)
+		}
+
+		currentPerfEventMaxStack := int(mapSpec.ValueSize) / 8
+		if currentPerfEventMaxStack > stack {
+			return fmt.Errorf("eBPF map: %s, %w, kernel setting: %d, eBPF code set: %d",
+				mapSpec.Name, InvalidPerfEventMaxStack, stack, currentPerfEventMaxStack)
+		}
+
+	}
+	return nil
+}
+
+// get /proc/sys/kernel/perf_event_max_stack
+func getPerfEventMaxStack() (int, error) {
+	content, err := os.ReadFile(PerfEventMaxStackPath)
+	if err != nil {
+		return 0, err
+	}
+
+	stack, err := strconv.Atoi(strings.TrimSpace(string(content)))
+	return stack, nil
 }
