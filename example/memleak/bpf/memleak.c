@@ -30,7 +30,7 @@ union combined_alloc_info
 #define ALLOCS_MAX_ENTRIES 1000000
 #define COMBINED_ALLOCS_MAX_ENTRIES 10240
 
-#define PERF_MAX_STACK_DEPTH 128
+#define PERF_MAX_STACK_DEPTH 127
 
 const volatile size_t min_size = 0;
 const volatile size_t max_size = -1;
@@ -73,9 +73,9 @@ struct
 struct
 {
     __uint(type, BPF_MAP_TYPE_STACK_TRACE);
-    __type(key, u32);
+    __uint(key_size, sizeof(u32));
     __uint(value_size, PERF_MAX_STACK_DEPTH * sizeof(u64));
-    __uint(max_entries, 1024);
+    __uint(max_entries, 10000);
 } stack_traces SEC(".maps");
 
 static __always_inline void *

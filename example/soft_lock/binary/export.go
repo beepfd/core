@@ -1,5 +1,5 @@
 package binary
 
 func ExportRaw() []byte {
-	return _SoftLockBytes
+	return _MemleakBytes
 }

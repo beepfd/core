@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/cen-ngc5139/BeePF/example/soft_lock/binary"
-	"github.com/cen-ngc5139/BeePF/example/soft_lock/src"
+	"github.com/cen-ngc5139/BeePF/example/memleak/binary"
+	"github.com/cen-ngc5139/BeePF/example/memleak/src"
 	"github.com/cen-ngc5139/BeePF/loader/lib/src/meta"
 	"github.com/cilium/ebpf/rlimit"
 
@@ -17,7 +17,7 @@ import (
 )
 
 //go:generate sh -c "echo Generating for $TARGET_GOARCH"
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type watchdog_tracking_info -type soft_lockup_event -target $TARGET_GOARCH -go-package binary -output-dir ./binary -cc clang -no-strip SoftLock ./bpf/soft_lock.c -- -I../headers -Wno-address-of-packed-member
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type watchdog_tracking_info -target $TARGET_GOARCH -go-package binary -output-dir ./binary -cc clang -no-strip SoftLock ./bpf/soft_lock.c -- -I../headers -Wno-address-of-packed-member
 
 //go:embed min_core_btfs.tar.gz
 var minCoreBtfs []byte
