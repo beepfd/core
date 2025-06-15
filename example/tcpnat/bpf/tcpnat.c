@@ -79,6 +79,15 @@ int BPF_KPROBE(tcp_sendmsg)
     return 0;
 }
 
+SEC("kprobe/tcp_v4_rcv")
+int kprobe__tcp_v4_rcv(struct pt_regs *ctx)
+{
+    struct sk_buff *skb = (struct sk_buff *)PT_REGS_PARM1(ctx);
+    void *skb_head = {0};
+    bpf_probe_read_kernel(&skb_head, sizeof(skb_head), (void *)skb + offsetof(struct sk_buff, head)); // <- 导致异常
+    return 0;
+}
+
 // SEC("kprobe/tcp_cleanup_rbuf")
 // int BPF_KPROBE(tcp_cleanup_rbuf)
 // {
