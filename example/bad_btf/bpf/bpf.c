@@ -9,6 +9,21 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define ETH_P_IP 0x800
 #define ETH_P_IPV6 0x86dd
+#define MAX_BUF_LEN 10
+
+struct sys_enter_read_args
+{
+    unsigned short common_type;         // offset:0,  size:2
+    unsigned char common_flags;         // offset:2,  size:1
+    unsigned char common_preempt_count; // offset:3,  size:1
+    int common_pid;                     // offset:4,  size:4
+
+    int __syscall_nr;    // offset:8,  size:4
+    unsigned int __pad1; // padding to align to offset:16
+    unsigned long fd;    // offset:16, size:8, 作为 unsigned long 处理
+    char *buf;           // offset:24, size:8
+    size_t count;        // offset:32, size:8
+};
 
 SEC("kprobe/tcp_v4_rcv")
 int kprobe__tcp_v4_rcv(struct pt_regs *ctx)
@@ -19,9 +34,22 @@ int kprobe__tcp_v4_rcv(struct pt_regs *ctx)
     return 0;
 }
 
-// SEC("kprobe/btf_check_all_metas")
-// int kprobe__btf_check_all_metas(struct pt_regs *ctx)
-// {
-//     bpf_printk("btf_check_all_metas\n");
-//     return 0;
-// }
+SEC("tracepoint/syscalls/sys_enter_write")
+int trace_sys_enter_write(struct sys_enter_read_args *ctx)
+{
+    char buf_preview[16]; // 只显示前15个字符
+
+    if (ctx->buf && ctx->count > 0)
+    {
+        bpf_probe_read_user_str(buf_preview, sizeof(buf_preview), ctx->buf);
+    }
+    else
+    {
+        buf_preview[0] = '\0';
+    }
+
+    bpf_printk("fd=%lu count=%lu buf=0x%lx", ctx->fd, ctx->count, (unsigned long)ctx->buf);
+    bpf_printk("buf_str=\"%s\"", buf_preview); // 分成两个printk调用
+
+    return 0;
+}
