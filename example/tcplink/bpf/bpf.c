@@ -24,7 +24,7 @@ struct {
 
 SEC("kprobe/tcp_conn_request")
 int handle_tcp_mark_skb_lost(struct pt_regs *ctx) {
-bpf_printk("TCP Lost Retransmitin");
+    bpf_printk("TCP Lost Retransmitin");
     struct sock *sk = (struct sock *)PT_REGS_PARM2(ctx);
     __u32 saddr, daddr;
     __u16 sport, dport;
@@ -53,9 +53,9 @@ bpf_printk("TCP Lost Retransmitin");
     sport = bpf_ntohs(sport);
     dport = bpf_ntohs(dport);
 
-bpf_printk("TCP conn Retransmit: %u,%u,%u", sacked, sk_ack_backlog, sk_max_backlog);
+    bpf_printk("TCP conn Retransmit: %u,%u,%u", sacked, sk_ack_backlog, sk_max_backlog);
     // 打印调试信息
-    bpf_printk("TCP Lost Retransmit: %pI4:%d -> %pI4:%d", &saddr, sport, &daddr, dport);
+    // bpf_printk("TCP Lost Retransmit: %pI4:%d -> %pI4:%d", &saddr, sport, &daddr, dport);
 //}}
 
     struct flow_tuple_4 link = {0};
