@@ -17,14 +17,13 @@ struct
     __uint(max_entries, 10000);
 } stack_traces SEC(".maps");
 
-SEC("tracepoint/syscalls/sys_enter_open")
-int trace_open_stack(struct trace_event_raw_sys_enter *ctx)
+SEC("tracepoint/syscalls/sys_enter_write")
+int trace_write_stack(struct trace_event_raw_sys_enter *ctx)
 {
-    u64 stack_id = bpf_get_stackid(ctx, &stack_traces, BPF_F_FAST_STACK_CMP);
-
     // 或者直接获取栈帧
     u64 stack[10];
     int ret = bpf_get_stack(ctx, stack, sizeof(stack), 0);
+    bpf_printk("stack: %d\n", ret);
     if (ret > 0)
     {
         // stack[0] 是当前执行的指令地址

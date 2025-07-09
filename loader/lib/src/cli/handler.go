@@ -68,6 +68,15 @@ func (h *BaseMapHandler) setupKeyValueExporter(m *ebpf.MapSpec) (*export.EventEx
 		SetUserContext(meta.NewUserContext(0)).
 		SetEventHandler(h.EventHandler)
 
+	if m.Key == nil && m.Value == nil && m.Type == ebpf.StackTrace {
+		m.Key = &btf.Int{Name: "u32", Size: 4, Encoding: btf.Unsigned}
+		stackDepth := int(m.ValueSize / 8)
+		m.Value = &btf.Array{
+			Type:   &btf.Int{Name: "u64", Size: 8, Encoding: btf.Unsigned},
+			Nelems: uint32(stackDepth),
+		}
+	}
+
 	exporter, err := ee.BuildForKeyValueWithTypeDesc(
 		export.NewBTFTypeDescriptor(m.Key, m.Key.TypeName()),
 		export.NewBTFTypeDescriptor(m.Value, m.Value.TypeName()),
