@@ -13,7 +13,7 @@ struct flow_tuple_4 {
     u32 dst;
     u16 sport;
     u16 dport;
-};
+} __attribute__((packed));
 
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
