@@ -68,9 +68,33 @@ func (h *BaseMapHandler) setupKeyValueExporter(m *ebpf.MapSpec) (*export.EventEx
 		SetUserContext(meta.NewUserContext(0)).
 		SetEventHandler(h.EventHandler)
 
+	// Use local variables to avoid modifying the original MapSpec
+	var keyType, valueType btf.Type
+	keyType = m.Key
+	valueType = m.Value
+
+	// Special handling for StackTrace maps
+	if m.Key == nil && m.Value == nil && m.Type == ebpf.StackTrace {
+		keyType = &btf.Int{Name: "u32", Size: 4, Encoding: btf.Unsigned}
+		// Validate that ValueSize is a multiple of 8 for stack traces
+		if m.ValueSize%8 != 0 {
+			return nil, fmt.Errorf("stack trace map value size (%d) must be a multiple of 8", m.ValueSize)
+		}
+		stackDepth := int(m.ValueSize / 8)
+		valueType = &btf.Array{
+			Type:   &btf.Int{Name: "u64", Size: 8, Encoding: btf.Unsigned},
+			Nelems: uint32(stackDepth),
+		}
+	}
+
+	// Check for nil types before calling TypeName()
+	if keyType == nil || valueType == nil {
+		return nil, fmt.Errorf("map key or value type is nil")
+	}
+
 	exporter, err := ee.BuildForKeyValueWithTypeDesc(
-		export.NewBTFTypeDescriptor(m.Key, m.Key.TypeName()),
-		export.NewBTFTypeDescriptor(m.Value, m.Value.TypeName()),
+		export.NewBTFTypeDescriptor(keyType, keyType.TypeName()),
+		export.NewBTFTypeDescriptor(valueType, valueType.TypeName()),
 		h.BTFContainer,
 		&meta.MapSampleMeta{
 			Interval: 1000,
