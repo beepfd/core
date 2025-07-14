@@ -4,12 +4,14 @@
 #include "vmlinux-x86.h"
 #include "bpf/bpf_helpers.h"
 #include "bpf/bpf_tracing.h"
+#include "bpf/bpf_core_read.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 #define ETH_P_IP 0x800
 #define ETH_P_IPV6 0x86dd
 #define MAX_BUF_LEN 10
+#define TASK_COMM_LEN 16
 
 struct sys_enter_read_args
 {
@@ -53,3 +55,27 @@ int trace_sys_enter_write(struct sys_enter_read_args *ctx)
 
     return 0;
 }
+
+
+// 该 prog 用于拦截 do_unlinkat 系统调用，当删除文件时，打印文件名和进程名
+SEC("kprobe/do_unlinkat")
+int BPF_KPROBE(do_unlinkat, int dfd, struct filename *name)
+{
+    const char *filename;
+    __u64 pid_tgid = bpf_get_current_pid_tgid();
+    __u32 pid = (pid_tgid << 32) >> 32;
+    __u32 tgid = pid_tgid >> 32;
+    char comm[TASK_COMM_LEN];
+    long ret;
+
+    filename = BPF_CORE_READ(name, name);
+
+    ret = bpf_get_current_comm(&comm, TASK_COMM_LEN);
+    if(ret)
+    {
+        bpf_printk("Failed to get current task name, pid = %d\n", pid);
+        return 1;
+    }
+    bpf_printk("KPROBE ENTRY pid = %d, filename = %s\n", pid, filename);
+    return 8;
+}  
